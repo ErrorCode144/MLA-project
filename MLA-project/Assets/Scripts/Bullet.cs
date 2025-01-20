@@ -7,8 +7,8 @@ using UnityEngine;
 [RequireComponent(typeof(SphereCollider))]
 [RequireComponent(typeof(MeshRenderer))]
 public class Bullet : MonoBehaviour {
-	[SerializeField] private float Speed = 2F;
-	[SerializeField] private uint Lifetime = 250U;
+	[SerializeField] private float Speed = 16F;
+	[SerializeField] private ushort Lifetime = 25;
 
 	private Rigidbody _rigidbody = null;
 	private SphereCollider _collider = null;
@@ -34,14 +34,12 @@ public class Bullet : MonoBehaviour {
 		_collider.enabled = true;
 		_renderer.enabled = true;
 
-		_currentLifeCount = (int)Lifetime;
+		_currentLifeCount = Lifetime;
 
 		IsActive = true;
 	}
 
 	public void Die() {
-		// _rigidbody.linearVelocity = Vector3.zero;
-
 		_collider.enabled = false;
 		_renderer.enabled = false;
 
@@ -69,6 +67,7 @@ public class Bullet : MonoBehaviour {
 
 	private void OnTriggerEnter(Collider other) {
 		if (other.CompareTag("Target")) {
+			_currentLifeCount = 0;
 			Die();
 		}
 	}

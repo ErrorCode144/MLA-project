@@ -2,41 +2,33 @@ using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 /// <summary>
 /// 標的に向かって弾を撃つエージェント
 /// 放った弾が命中すると報酬を得る
 /// </summary>
-[RequireComponent(typeof(PlayerInput))]
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(DecisionRequester))]
 public class ShooterAgent : Agent {
 	// ターゲット
 	[SerializeField] private Transform Target = null;
 	// 回転の速さ
-	[SerializeField] private float RotateSpeed = 1F;
+	[SerializeField] private float RotateSpeed = 3.6F;
 	// 移動の速さ
-	[SerializeField] private float MoveSpeed = 1F;
+	[SerializeField] private float MoveSpeed = 4F;
+	// センサーのレイ毎の報酬の値
+	[SerializeField] private float _sensorThreshold = 0.001F;
 
 	// センサー
 	private RayPerceptionSensorComponent3D _sensor = null;	// キャッシュ
 	private RayPerceptionOutput _sensorOutput = new();		// 出力先
 	private RayPerceptionInput _sensorInput;				// センサーを定義するデータ
 
-	// Heuristicで用いる入力アクション
-	private InputAction _turnAction = null;	// 旋回
-	private InputAction _moveAction = null;	// 移動
-	private InputAction _fireAction = null;	// 弾の発射
-
 	// 剛体
 	private Rigidbody _rigidbody = null;
 
 	// 弾
 	private Bullet _bullet = null;
-
-	// センサーのレイ毎の報酬の値
-	private float[] _sensorThresholds = null;
 
 	// 放った弾が命中したかどうか
 	public bool Hit { get; set; } = false;
@@ -88,15 +80,16 @@ public class ShooterAgent : Agent {
 
 		_sensorOutput = RayPerceptionSensor.Perceive(_sensorInput, false);
 
-		for (byte i = 0; i < _sensorThresholds.Length; ++i) {
-			if (_sensorOutput.RayOutputs[i].HitTagIndex == 0) {
-				AddReward(_sensorThresholds[i]);
+		foreach (var ray in _sensorOutput.RayOutputs) {
+			if (ray.HitTagIndex == 0) {
+				AddReward(_sensorThreshold);
+				break;
 			}
 		}
 
 		if (Hit) {
 			// 大きな報酬を与える
-			AddReward(10F);
+			AddReward(1F);
 			// エピソードを終える
 			EndEpisode();
 		}
@@ -120,8 +113,8 @@ public class ShooterAgent : Agent {
 		/*
 		 * rotate =
 		 * 0 : 回転しない
-		 * 1 : 左回転
-		 * 2 : 右回転
+		 * 1 : 右回転
+		 * 2 : 左回転
 		 */
 		switch (rotate) {
 			case 1:
@@ -186,40 +179,36 @@ public class ShooterAgent : Agent {
 		// 角速度を加える
 		_rigidbody.angularVelocity = RotateSpeed * rotateDirection;
 		// 速度を加える
-		_rigidbody.linearVelocity = MoveSpeed * moveDirection;
+		_rigidbody.linearVelocity = new Vector3(
+			MoveSpeed * moveDirection.x,
+			_rigidbody.linearVelocity.y,
+			MoveSpeed * moveDirection.z
+		);
 	}
 
 	public override void Heuristic(in ActionBuffers actionsOut) {
 		ActionSegment<int> actions = actionsOut.DiscreteActions;
 		actions.Clear();
 
-		if (_turnAction.WasPerformedThisFrame()) {
-			float axis = _turnAction.ReadValue<float>();
-
-			if (axis < 0) {
-				actions[0] = 1;
-			} else if (axis > 0) {
-				actions[0] = 2;
-			}
+		if (Input.GetKey(KeyCode.E)) {
+			actions[0] = 1;
+		} else if (Input.GetKey(KeyCode.Q)) {
+			actions[0] = 2;
 		}
 
-		if (_moveAction.WasPerformedThisFrame()) {
-			Vector2 vec = _moveAction.ReadValue<Vector2>();
-
-			if (vec.y > 0) {
-				actions[1] = 1;
-			} else if (vec.y < 0) {
-				actions[1] = 2;
-			}
-
-			if (vec.x > 0) {
-				actions[2] = 1;
-			} else if (vec.x < 0) {
-				actions[2] = 2;
-			}
+		if (Input.GetKey(KeyCode.W)) {
+			actions[1] = 1;
+		} else if (Input.GetKey(KeyCode.S)) {
+			actions[1] = 2;
 		}
 
-		if (_fireAction.WasPerformedThisFrame()) {
+		if (Input.GetKey(KeyCode.D)) {
+			actions[2] = 1;
+		} else if (Input.GetKey(KeyCode.A)) {
+			actions[2] = 2;
+		}
+
+		if (Input.GetKey(KeyCode.Space)) {
 			actions[3] = 1;
 		}
 	}
@@ -231,18 +220,7 @@ public class ShooterAgent : Agent {
 		_sensor = GetComponent<RayPerceptionSensorComponent3D>();
 		_sensorInput = _sensor.GetRayPerceptionInput();
 
-		InputActionMap actionMap = GetComponent<PlayerInput>().currentActionMap;
-		_turnAction = actionMap.FindAction("Turn");
-		_moveAction = actionMap.FindAction("Move");
-		_fireAction = actionMap.FindAction("Fire");
-
 		_rigidbody = GetComponent<Rigidbody>();
 		_bullet = GetComponentInChildren<Bullet>();
-
-		_sensorThresholds = new float[]{
-			0.006F,				// 真正面
-			0.004F, 0.004F,
-			0.001F, 0.001F		// 外側
-		};
 	}
 }
